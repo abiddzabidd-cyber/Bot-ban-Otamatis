@@ -36,7 +36,7 @@ client.on("messageCreate", async (message) => {
 
       if (violations[id] === 1) {
 
-        await message.member.timeout(86400000, "Kata terlarang");
+        await message.member.timeout(86400000,"Kata terlarang");
 
         try{
           await message.author.send("🚫 Kamu timeout 1 hari karena kata terlarang");
@@ -47,7 +47,7 @@ client.on("messageCreate", async (message) => {
       } else {
 
         try{
-          await message.author.send("⛔ Kamu diban karena mengulang kata terlarang");
+          await message.author.send("⛔ Kamu diban permanent karena mengulang kata terlarang");
         }catch{}
 
         await message.guild.members.ban(id);
@@ -78,6 +78,16 @@ client.on("interactionCreate", async interaction => {
 
   }
 
+  if (interaction.commandName === "removeword") {
+
+    const word = interaction.options.getString("kata").toLowerCase();
+
+    bannedWords = bannedWords.filter(w => w !== word);
+
+    interaction.reply(`🗑 Kata **${word}** dihapus`);
+
+  }
+
   if (interaction.commandName === "listword") {
 
     interaction.reply(`📋 Kata terlarang:\n${bannedWords.join(", ")}`);
@@ -87,9 +97,19 @@ client.on("interactionCreate", async interaction => {
 });
 
 const commands = [
+
 new SlashCommandBuilder()
 .setName("addword")
 .setDescription("Tambah kata terlarang")
+.addStringOption(o =>
+  o.setName("kata")
+  .setDescription("kata")
+  .setRequired(true)
+),
+
+new SlashCommandBuilder()
+.setName("removeword")
+.setDescription("Hapus kata terlarang")
 .addStringOption(o =>
   o.setName("kata")
   .setDescription("kata")
@@ -102,7 +122,7 @@ new SlashCommandBuilder()
 
 ].map(c => c.toJSON());
 
-const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
+const rest = new REST({version:"10"}).setToken(process.env.TOKEN);
 
 (async () => {
   try {
@@ -112,7 +132,7 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
         process.env.CLIENT_ID,
         process.env.GUILD_ID
       ),
-      { body: commands }
+      {body:commands}
     );
 
     console.log("Slash command berhasil dibuat");
