@@ -1,174 +1,125 @@
 require("dotenv").config();
-const { 
-Client, 
-GatewayIntentBits, 
-SlashCommandBuilder, 
-REST, 
-Routes 
-} = require("discord.js");
+const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes } = require("discord.js");
 
 const client = new Client({
-intents: [
-GatewayIntentBits.Guilds,
-GatewayIntentBits.GuildMessages,
-GatewayIntentBits.MessageContent
-]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
 });
 
 let bannedWords = ["miau"];
-const violations = {};
-
-function normalize(text){
-return text.toLowerCase().replace(/[^a-z]/g,"");
-}
+let violations = {};
 
 client.once("ready", () => {
-console.log(`Bot online sebagai ${client.user.tag}`);
+  console.log(`Bot online sebagai ${client.user.tag}`);
 });
 
 client.on("messageCreate", async (message) => {
 
-if(message.author.bot) return;
+  if (message.author.bot) return;
 
-const clean = normalize(message.content);
+  const msg = message.content.toLowerCase();
 
-for(const word of bannedWords){
+  for (const word of bannedWords) {
 
-if(clean.includes(word)){
+    if (msg.includes(word)) {
 
-const userId = message.author.id;
+      const id = message.author.id;
 
-if(!violations[userId]){
-violations[userId] = 0;
-}
+      if (!violations[id]) violations[id] = 0;
 
-violations[userId]++;
+      violations[id]++;
 
-await message.delete().catch(()=>{});
+      await message.delete().catch(()=>{});
 
-if(violations[userId] === 1){
+      if (violations[id] === 1) {
 
-await message.member.timeout(86400000,"Kata terlarang");
+        await message.member.timeout(86400000, "Kata terlarang");
 
-try{
-await message.author.send(
-`🚫 Kamu timeout 1 hari karena mengirim kata terlarang di server **${message.guild.name}**`
-);
-}catch{}
+        try{
+          await message.author.send("🚫 Kamu timeout 1 hari karena kata terlarang");
+        }catch{}
 
-message.channel.send(
-`🚫 ${message.author} timeout 1 hari karena kata terlarang`
-);
+        message.channel.send(`🚫 ${message.author} timeout 1 hari`);
 
-}else{
+      } else {
 
-try{
-await message.author.send(
-`⛔ Kamu diban permanent dari server **${message.guild.name}** karena mengulang kata terlarang`
-);
-}catch{}
+        try{
+          await message.author.send("⛔ Kamu diban karena mengulang kata terlarang");
+        }catch{}
 
-await message.guild.members.ban(userId,{
-reason:"Mengulang kata terlarang"
-});
+        await message.guild.members.ban(id);
 
-message.channel.send(
-`⛔ ${message.author.tag} diban permanent`
-);
+        message.channel.send(`⛔ ${message.author.tag} diban permanent`);
 
-}
+      }
 
-}
+      return;
 
-}
+    }
+
+  }
 
 });
 
 client.on("interactionCreate", async interaction => {
 
-if(!interaction.isChatInputCommand()) return;
+  if (!interaction.isChatInputCommand()) return;
 
-if(!interaction.member.permissions.has("Administrator")){
-return interaction.reply({
-content:"❌ Hanya admin yang bisa pakai command ini",
-ephemeral:true
-});
-}
+  if (interaction.commandName === "addword") {
 
-if(interaction.commandName === "addword"){
+    const word = interaction.options.getString("kata").toLowerCase();
 
-const word = interaction.options.getString("kata");
+    bannedWords.push(word);
 
-bannedWords.push(word.toLowerCase());
+    interaction.reply(`✅ Kata **${word}** ditambahkan`);
 
-interaction.reply(`✅ Kata **${word}** berhasil ditambahkan`);
+  }
 
-}
+  if (interaction.commandName === "listword") {
 
-if(interaction.commandName === "removeword"){
+    interaction.reply(`📋 Kata terlarang:\n${bannedWords.join(", ")}`);
 
-const word = interaction.options.getString("kata");
-
-bannedWords = bannedWords.filter(w => w !== word.toLowerCase());
-
-interaction.reply(`🗑 Kata **${word}** berhasil dihapus`);
-
-}
-
-if(interaction.commandName === "listword"){
-
-interaction.reply(
-`📋 Kata terlarang:\n${bannedWords.join("\n")}`
-);
-
-}
+  }
 
 });
 
 const commands = [
-
 new SlashCommandBuilder()
 .setName("addword")
 .setDescription("Tambah kata terlarang")
-.addStringOption(option =>
-option.setName("kata")
-.setDescription("kata")
-.setRequired(true)
-),
-
-new SlashCommandBuilder()
-.setName("removeword")
-.setDescription("Hapus kata terlarang")
-.addStringOption(option =>
-option.setName("kata")
-.setDescription("kata")
-.setRequired(true)
+.addStringOption(o =>
+  o.setName("kata")
+  .setDescription("kata")
+  .setRequired(true)
 ),
 
 new SlashCommandBuilder()
 .setName("listword")
 .setDescription("Lihat kata terlarang")
 
-].map(command => command.toJSON());
+].map(c => c.toJSON());
 
-const rest = new REST({version:"10"}).setToken(process.env.TOKEN);
+const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
 
 (async () => {
-try{
+  try {
 
-await rest.put(
-Routes.applicationGuildCommands(
-process.env.CLIENT_ID,
-process.env.GUILD_ID
-),
-{body:commands}
-);
+    await rest.put(
+      Routes.applicationGuildCommands(
+        process.env.CLIENT_ID,
+        process.env.GUILD_ID
+      ),
+      { body: commands }
+    );
 
-console.log("Slash command berhasil dibuat");
+    console.log("Slash command berhasil dibuat");
 
-}catch(error){
-console.error(error);
-}
+  } catch (error) {
+    console.error(error);
+  }
 })();
 
 client.login(process.env.TOKEN);
