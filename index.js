@@ -1,5 +1,6 @@
 require("dotenv").config();
 const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes } = require("discord.js");
+const fs = require("fs");
 
 const client = new Client({
   intents: [
@@ -9,32 +10,48 @@ const client = new Client({
   ]
 });
 
-let bannedWords = ["miau"];
+let data = JSON.parse(fs.readFileSync("words.json"));
+let bannedWords = data.words;
+
 let violations = {};
+
+function normalize(text){
+  return text
+  .toLowerCase()
+  .replace(/1/g,"i")
+  .replace(/3/g,"e")
+  .replace(/4/g,"a")
+  .replace(/0/g,"o")
+  .replace(/[^a-z]/g,"");
+}
+
+function saveWords(){
+  fs.writeFileSync("words.json", JSON.stringify({words:bannedWords},null,2));
+}
 
 client.once("ready", () => {
   console.log(`Bot online sebagai ${client.user.tag}`);
 });
 
-client.on("messageCreate", async (message) => {
+client.on("messageCreate", async (message)=>{
 
-  if (message.author.bot) return;
+  if(message.author.bot) return;
 
-  const msg = message.content.toLowerCase();
+  const msg = normalize(message.content);
 
-  for (const word of bannedWords) {
+  for(const word of bannedWords){
 
-    if (msg.includes(word)) {
+    if(msg.includes(normalize(word))){
 
       const id = message.author.id;
 
-      if (!violations[id]) violations[id] = 0;
+      if(!violations[id]) violations[id]=0;
 
       violations[id]++;
 
       await message.delete().catch(()=>{});
 
-      if (violations[id] === 1) {
+      if(violations[id]===1){
 
         await message.member.timeout(86400000,"Kata terlarang");
 
@@ -44,7 +61,7 @@ client.on("messageCreate", async (message) => {
 
         message.channel.send(`🚫 ${message.author} timeout 1 hari`);
 
-      } else {
+      }else{
 
         try{
           await message.author.send("⛔ Kamu diban permanent karena mengulang kata terlarang");
@@ -64,68 +81,84 @@ client.on("messageCreate", async (message) => {
 
 });
 
-client.on("interactionCreate", async interaction => {
+client.on("interactionCreate", async interaction=>{
 
-  if (!interaction.isChatInputCommand()) return;
+  if(!interaction.isChatInputCommand()) return;
 
-  if (interaction.commandName === "addword") {
+  if(interaction.commandName==="addword"){
 
     const word = interaction.options.getString("kata").toLowerCase();
 
+    if(bannedWords.includes(word)){
+      return interaction.reply("⚠️ Kata sudah ada di blacklist.");
+    }
+
     bannedWords.push(word);
+    saveWords();
 
     interaction.reply(`✅ Kata **${word}** ditambahkan`);
 
   }
 
-  if (interaction.commandName === "removeword") {
+  if(interaction.commandName==="removeword"){
 
     const word = interaction.options.getString("kata").toLowerCase();
 
-    bannedWords = bannedWords.filter(w => w !== word);
+    if(!bannedWords.includes(word)){
+      return interaction.reply("⚠️ Kata tidak ditemukan.");
+    }
+
+    bannedWords = bannedWords.filter(w=>w!==word);
+    saveWords();
 
     interaction.reply(`🗑 Kata **${word}** dihapus`);
 
   }
 
-  if (interaction.commandName === "listword") {
+  if(interaction.commandName==="listword"){
 
-    interaction.reply(`📋 Kata terlarang:\n${bannedWords.join(", ")}`);
+    if(bannedWords.length===0){
+      return interaction.reply("📋 Tidak ada kata terlarang.");
+    }
+
+    interaction.reply(
+`📋 **Daftar Kata Terlarang**
+
+Jumlah kata: ${bannedWords.length}
+
+${bannedWords.map((w,i)=>`${i+1}. ${w}`).join("\n")}`
+    );
 
   }
 
 });
 
-const commands = [
+const commands=[
 
 new SlashCommandBuilder()
 .setName("addword")
 .setDescription("Tambah kata terlarang")
-.addStringOption(o =>
-  o.setName("kata")
-  .setDescription("kata")
-  .setRequired(true)
+.addStringOption(o=>
+o.setName("kata").setDescription("kata").setRequired(true)
 ),
 
 new SlashCommandBuilder()
 .setName("removeword")
 .setDescription("Hapus kata terlarang")
-.addStringOption(o =>
-  o.setName("kata")
-  .setDescription("kata")
-  .setRequired(true)
+.addStringOption(o=>
+o.setName("kata").setDescription("kata").setRequired(true)
 ),
 
 new SlashCommandBuilder()
 .setName("listword")
 .setDescription("Lihat kata terlarang")
 
-].map(c => c.toJSON());
+].map(c=>c.toJSON());
 
 const rest = new REST({version:"10"}).setToken(process.env.TOKEN);
 
-(async () => {
-  try {
+(async()=>{
+  try{
 
     await rest.put(
       Routes.applicationGuildCommands(
@@ -137,8 +170,8 @@ const rest = new REST({version:"10"}).setToken(process.env.TOKEN);
 
     console.log("Slash command berhasil dibuat");
 
-  } catch (error) {
-    console.error(error);
+  }catch(err){
+    console.error(err);
   }
 })();
 
